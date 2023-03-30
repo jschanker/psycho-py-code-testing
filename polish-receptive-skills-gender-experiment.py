@@ -3,14 +3,12 @@ from psychopy import sound, visual, core, event, constants  # import some librar
 from time import time
 # from functools import partial
 
-def every(conditions):
-  def everyCond(args):
-    return all([condition(args) for condition in conditions])
-    
-  return everyCond
-  
-def some(conditions, args=None):
-  return partial(any, [condition(args) for condition in conditions])
+def findOneIndex(arr, f):
+  for i in range(len(arr)):
+    if f(arr[i]):
+      return i
+
+  return -1
   
 def addImages(win, filePaths, vPadding=10, hPadding=10, scaleToFit=True):
   fitNum = len(filePaths)
@@ -97,6 +95,12 @@ def timeElapsed(s):
   
 def doNothing(retVal=None):
   pass
+  
+def pressedIn(m): 
+  def mousePressed(stimuli):
+    return any([m.isPressedIn(stim) for stim in stimuli])
+    
+  return mousePressed
 
 def every(conditions):
   def everyCond(args):
@@ -112,25 +116,39 @@ def some(conditions):
   
 def stopSound(arg=None):
   arg.stop()
+  
+def calculateCorrect(correctArr, index):
+  def addCorrect(stimuli):
+    selectedIndex = findOneIndex(stimuli, lambda stim: m.isPressedIn(stim))
+    correctArr.append(selectedIndex == index)
+      
+  return addCorrect
 
-def runTrial(initFunc, repeatFunc, isCompleteFunc, finishFunc=doNothing):
+def runTrial(initFunc, repeatFunc, isCompleteFunc, finishFunc=doNothing, times=[]):
   retVal = initFunc()
+  startTime = time()
   while(not isCompleteFunc(retVal)):
     repeatFunc(retVal)
-    
+  timeElapsed = time() - startTime
   finishFunc(retVal)
+  times.append(timeElapsed)
+  return timeElapsed
 
 # Start experiment
 mywin = visual.Window([1600,700], monitor="testMonitor", units="pix")
 #print("POS", mywin.pos)
 #mywin.pos = (0, mywin.pos[1])
 #print("POS", mywin.pos)
-smile = addImages(mywin, ['smile.png', 'smile.png'])
+correctArr = []
+times = []
+smile = addImages(mywin, ['smile.png', 'smile.png', 'smile.png'])
 instructions = addSound(mywin, "Toreador-clipped.wav")
 m = event.Mouse(win=mywin)
 runTrial(instructions, doNothing, some([soundIsFinished, pressedEnter]), stopSound)
+runTrial(smile, doNothing, some([pressedEnter, pressedIn(m)]), calculateCorrect(correctArr, index=1), times)
+print("Results", correctArr, times)
 # runTrial(smile, doNothing, timeElapsed(6))
-runTrial(smile, doNothing, pressedEnter)
+# runTrial(smile, doNothing, pressedEnter)
 
 # clean up and exit
 mywin.close()
