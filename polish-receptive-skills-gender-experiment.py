@@ -1,7 +1,33 @@
 from enum import Enum
 from psychopy import sound, visual, core, event, constants  # import some libraries from PsychoPy
 from time import time
+import pandas as pd
+from random import randint
 # from functools import partial
+
+def getExperiment(): 
+  df = pd.read_excel('EXPERIMENTAL_PHASE.xlsx', sheet_name=0)
+  row0 = df.iloc[0].tolist()
+  colName = df.columns
+  col0 = df.iloc[:,0].tolist()
+  print(df.iloc[1].tolist())
+  print("COL0", col0)
+  COLS_IN_EXP = row0.index("Audio") - row0.index("Accurate answer") + 1
+  NUM_OF_LISTS_X = len(row0)/COLS_IN_EXP
+  accurateAnswerRowIndex = col0.index("Accurate answer")
+  ROWS_IN_EXP = col0.index("Accurate answer", accurateAnswerRowIndex + 1) - accurateAnswerRowIndex - 2
+  NUM_OF_LISTS_Y = (len(col0) + 1)/(ROWS_IN_EXP + 2)
+  NUM_OF_LISTS = NUM_OF_LISTS_X * NUM_OF_LISTS_Y
+  experimentRowNum = randint(0, NUM_OF_LISTS_Y - 1)
+  experimentColNum = randint(0, NUM_OF_LISTS_X - 1)
+  expRows = df.iloc[experimentRowNum * (ROWS_IN_EXP + 2) + 1 : experimentRowNum * (ROWS_IN_EXP + 2) + 1 + ROWS_IN_EXP,
+  experimentColNum * (COLS_IN_EXP) : (experimentColNum + 1) * (COLS_IN_EXP)]
+  print("ROWS", COLS_IN_EXP, NUM_OF_LISTS_X, NUM_OF_LISTS_Y, ROWS_IN_EXP, experimentRowNum, experimentColNum)
+  print("SLICE", experimentRowNum * (COLS_IN_EXP), (experimentRowNum + 1) * (COLS_IN_EXP), 
+  experimentColNum * ROWS_IN_EXP , (experimentColNum + 1) * ROWS_IN_EXP + 1)
+  print("EXP", expRows.values)
+
+getExperiment()
 
 def findOneIndex(arr, f):
   for i in range(len(arr)):
@@ -13,7 +39,7 @@ def findOneIndex(arr, f):
 def addImages(win, filePaths, vPadding=10, hPadding=10, scaleToFit=True):
   fitNum = len(filePaths)
   availableX = (win.size[0] - (fitNum + 1) * hPadding)/fitNum
-  availableY = 2000*(win.size[1] - 2 * vPadding)
+  availableY = (win.size[1] - 2 * vPadding)
   imgs = [visual.ImageStim(win, filePath, units="pix", anchor="left") for filePath in filePaths]
   imgSizeRatio = min(*[min(availableX/img.size[0], availableY/img.size[1]) for img in imgs])
   
@@ -142,9 +168,10 @@ mywin = visual.Window([1600,700], monitor="testMonitor", units="pix")
 correctArr = []
 times = []
 smile = addImages(mywin, ['smile.png', 'smile.png', 'smile.png'])
-instructions = addSound(mywin, "Toreador-clipped.wav")
+# instructions = addSound(mywin, "Toreador-clipped.wav")
+#instructions = addSound(mywin, "recordings/D1-DIMM.mp3")
 m = event.Mouse(win=mywin)
-runTrial(instructions, doNothing, some([soundIsFinished, pressedEnter]), stopSound)
+# runTrial(instructions, doNothing, some([soundIsFinished, pressedEnter]), stopSound)
 runTrial(smile, doNothing, some([pressedEnter, pressedIn(m)]), calculateCorrect(correctArr, index=1), times)
 print("Results", correctArr, times)
 # runTrial(smile, doNothing, timeElapsed(6))
