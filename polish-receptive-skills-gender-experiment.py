@@ -5,13 +5,13 @@ import pandas as pd
 from random import randint
 # from functools import partial
 
-def getExperiment(): 
+def getExperiment():
   df = pd.read_excel('EXPERIMENTAL_PHASE.xlsx', sheet_name=0)
   row0 = df.iloc[0].tolist()
   colName = df.columns
   col0 = df.iloc[:,0].tolist()
-  print(df.iloc[1].tolist())
-  print("COL0", col0)
+  #print(df.iloc[1].tolist())
+  #print("COL0", col0)
   COLS_IN_EXP = row0.index("Audio") - row0.index("Accurate answer") + 1
   NUM_OF_LISTS_X = len(row0)/COLS_IN_EXP
   accurateAnswerRowIndex = col0.index("Accurate answer")
@@ -22,12 +22,20 @@ def getExperiment():
   experimentColNum = randint(0, NUM_OF_LISTS_X - 1)
   expRows = df.iloc[experimentRowNum * (ROWS_IN_EXP + 2) + 1 : experimentRowNum * (ROWS_IN_EXP + 2) + 1 + ROWS_IN_EXP,
   experimentColNum * (COLS_IN_EXP) : (experimentColNum + 1) * (COLS_IN_EXP)]
-  print("ROWS", COLS_IN_EXP, NUM_OF_LISTS_X, NUM_OF_LISTS_Y, ROWS_IN_EXP, experimentRowNum, experimentColNum)
-  print("SLICE", experimentRowNum * (COLS_IN_EXP), (experimentRowNum + 1) * (COLS_IN_EXP), 
-  experimentColNum * ROWS_IN_EXP , (experimentColNum + 1) * ROWS_IN_EXP + 1)
-  print("EXP", expRows.values)
-
-getExperiment()
+  #print("ROWS", COLS_IN_EXP, NUM_OF_LISTS_X, NUM_OF_LISTS_Y, ROWS_IN_EXP, experimentRowNum, experimentColNum)
+  #print("SLICE", experimentRowNum * (COLS_IN_EXP), (experimentRowNum + 1) * (COLS_IN_EXP), 
+  #experimentColNum * ROWS_IN_EXP , (experimentColNum + 1) * ROWS_IN_EXP + 1)
+  exp = [
+    [
+     [pict[-1].lower() for pict in row[1:COLS_IN_EXP-1]].index(row[0].split()[1].lower()), 
+     ["PICTURES FOR VISUAL STIMULI/" + img + ".jpeg" for img in row[1:COLS_IN_EXP-1]], 
+     row[COLS_IN_EXP-1]] 
+     for row in expRows.values.tolist()
+  ]
+  print("EXPERIMENT ROW", experimentRowNum, "COL", experimentColNum, 
+  "chosen from", NUM_OF_LISTS_Y, "rows and", NUM_OF_LISTS_X, "columns:\n", exp)
+  print("\n")
+  return exp
 
 def findOneIndex(arr, f):
   for i in range(len(arr)):
@@ -162,17 +170,22 @@ def runTrial(initFunc, repeatFunc, isCompleteFunc, finishFunc=doNothing, times=[
 
 # Start experiment
 mywin = visual.Window([1600,700], monitor="testMonitor", units="pix")
+exp = getExperiment()
 #print("POS", mywin.pos)
 #mywin.pos = (0, mywin.pos[1])
 #print("POS", mywin.pos)
 correctArr = []
 times = []
-smile = addImages(mywin, ['smile.png', 'smile.png', 'smile.png'])
+m = event.Mouse(win=mywin)
+for [ans, imageArr, sound] in exp:
+  images = addImages(mywin, imageArr)
+  runTrial(images, doNothing, some([pressedEnter, pressedIn(m)]), calculateCorrect(correctArr, index=ans), times)
+
+#smile = addImages(mywin, ['smile.png', 'smile.png', 'smile.png'])
 # instructions = addSound(mywin, "Toreador-clipped.wav")
 #instructions = addSound(mywin, "recordings/D1-DIMM.mp3")
-m = event.Mouse(win=mywin)
 # runTrial(instructions, doNothing, some([soundIsFinished, pressedEnter]), stopSound)
-runTrial(smile, doNothing, some([pressedEnter, pressedIn(m)]), calculateCorrect(correctArr, index=1), times)
+#runTrial(smile, doNothing, some([pressedEnter, pressedIn(m)]), calculateCorrect(correctArr, index=1), times)
 print("Results", correctArr, times)
 # runTrial(smile, doNothing, timeElapsed(6))
 # runTrial(smile, doNothing, pressedEnter)
