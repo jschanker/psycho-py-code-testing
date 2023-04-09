@@ -1,9 +1,37 @@
 from enum import Enum
 from psychopy import sound, visual, core, event, constants  # import some libraries from PsychoPy
-from time import time
+from time import time, sleep
 import pandas as pd
 from random import randint
 # from functools import partial
+
+def getTraining():
+  df = pd.read_excel('TRAINING_PHASE.xlsx', sheet_name=0)
+  row0 = df.iloc[0].tolist()
+  colName = df.columns
+  col0 = df.iloc[:,0].tolist()
+  #print(df.iloc[1].tolist())
+  #print("COL0", col0)
+  COLS_IN_TRIAL = row0.index("Audio") - row0.index("Accurate answer") + 1
+  accurateAnswerRowIndex = col0.index("Accurate answer")
+  NUM_OF_TRAINING_TRIALS = len(col0) - accurateAnswerRowIndex - 1
+  trainingRows = df.iloc[accurateAnswerRowIndex + 1 : accurateAnswerRowIndex + 1 + NUM_OF_TRAINING_TRIALS,
+  0 : COLS_IN_TRIAL]
+  # print("HIGHLIGHTED", findIndex(trainingRows.values.tolist()[0], lambda x: x)
+  #print("ROWS", COLS_IN_EXP, NUM_OF_LISTS_X, NUM_OF_LISTS_Y, ROWS_IN_EXP, experimentRowNum, experimentColNum)
+  #print("SLICE", experimentRowNum * (COLS_IN_EXP), (experimentRowNum + 1) * (COLS_IN_EXP), 
+  #experimentColNum * ROWS_IN_EXP , (experimentColNum + 1) * ROWS_IN_EXP + 1)
+  print("TRAINING ROWS", COLS_IN_TRIAL, accurateAnswerRowIndex, NUM_OF_TRAINING_TRIALS, trainingRows.values.tolist())
+  trial = [
+    [
+     [pict[-1].lower() for pict in row[1:COLS_IN_TRIAL-1]].index(row[0].split()[2].lower()), 
+     ["PICTURES FOR VISUAL STIMULI/" + img + ".jpeg" for img in row[1:COLS_IN_TRIAL-1]], 
+     row[COLS_IN_TRIAL-1]] 
+     for row in trainingRows.values.tolist()
+  ]
+  print(NUM_OF_TRAINING_TRIALS, "TRIALS In training data", trial)
+  print("\n")
+  return trial
 
 def getExperiment():
   df = pd.read_excel('EXPERIMENTAL_PHASE.xlsx', sheet_name=0)
@@ -49,17 +77,17 @@ def addImages(win, filePaths, vPadding=10, hPadding=10, scaleToFit=True):
   availableX = (win.size[0] - (fitNum + 1) * hPadding)/fitNum
   availableY = (win.size[1] - 2 * vPadding)
   imgs = [visual.ImageStim(win, filePath, units="pix", anchor="left") for filePath in filePaths]
-  imgSizeRatio = min(*[min(availableX/img.size[0], availableY/img.size[1]) for img in imgs])
-  
-  if (not scaleToFit): imgSizeRatio = min(imgSizeRatio, 1)
+  #imgSizeRatio = min(*[min(availableX/img.size[0], availableY/img.size[1]) for img in imgs])
+  #if (not scaleToFit): imgSizeRatio = min(imgSizeRatio, 1)
   
   for index in range(len(imgs)):
     img = imgs[index]
     # if fp != '': # actual image, not used for placeholder
-    img.size = [imgSizeRatio * img.size[0], imgSizeRatio * img.size[1]]
+    #img.size = [imgSizeRatio * img.size[0], imgSizeRatio * img.size[1]]
+    img.size = [availableX, availableX/img.size[0]*img.size[1]]
     img.pos[0] = (index + 1) * hPadding + index * img.size[0] - win.size[0]/2
     # img.pos[0] = -1
-    print("x", img.pos[0])
+    #print("x", img.pos[0])
     
   def initImgs():
     [img.draw() for img in imgs]
@@ -72,13 +100,25 @@ def addSound(win, soundPath):
   snd = sound.Sound(soundPath)
   
   def initSound():
-    win.flip()
+    # win.flip()
     # nextFlip = win.getFutureFlipTime(clock='ptb')
     # sound.play(when=nextFlip)
     snd.play()
     return snd
 
   return initSound
+  
+def addImagesWithSound(win, imageFilePaths, soundPath, vPadding=10, hPadding=10, scaleToFit=True):
+  initSound = addSound(win, soundPath)
+  initImgs = addImages(win, imageFilePaths, vPadding, hPadding, scaleToFit)
+  
+  def initImagesWithSound():
+    imgs = initImgs()
+    snd = initSound()
+    return [imgs, snd]
+    
+  return initImagesWithSound
+    
 
 #win.flip()
     
@@ -132,6 +172,8 @@ def doNothing(retVal=None):
   
 def pressedIn(m): 
   def mousePressed(stimuli):
+    if type(stimuli[0]) is list:
+      stimuli = stimuli[0] # hack to deal with [image, sound]
     return any([m.isPressedIn(stim) for stim in stimuli])
     
   return mousePressed
@@ -149,7 +191,33 @@ def some(conditions):
   return someCond
   
 def stopSound(arg=None):
-  arg.stop()
+  if type(arg) is list:
+    [x.stop() if hasattr(x, 'stop') else "" for x in arg]
+  else:
+    arg.stop()
+    
+def isImage(img):
+  return hasattr(img, size) # look up class type to use instanceof instead
+    
+def getTrialSoundPath(index, isCue=False):
+  answers = 'abcdefghij' # up to 10 letters
+  suffix = 'Cue' if isCue else 'Feedback'
+  return 'wav_recordings/T' + str(index + 1) + answers[index] + ' ' + suffix + '.wav'
+
+def respondWithFeedback(index):
+  def respond(stimuli):
+    #print("STIMULI", stimuli)
+    stimuli = stimuli[0] # hack: need to fix this if images are not in 0th position
+    selectedIndex = findOneIndex(stimuli, lambda stim: m.isPressedIn(stim))
+    if selectedIndex == index:
+      snd = sound.Sound(getTrialSoundPath(index))
+      snd.play()
+      while not soundIsFinished(snd):
+        pass
+    else:
+      print("Wrong answer selected") # need incorrect feedback
+    
+  return respond
   
 def calculateCorrect(correctArr, index):
   def addCorrect(stimuli):
@@ -167,9 +235,17 @@ def runTrial(initFunc, repeatFunc, isCompleteFunc, finishFunc=doNothing, times=[
   finishFunc(retVal)
   times.append(timeElapsed)
   return timeElapsed
+  
+# Start training
+mywin = visual.Window([700,700], monitor="testMonitor", units="pix")
+training = getTraining()
+instructions = addSound(mywin, "Toreador-clipped.wav") # need instructions
+runTrial(instructions, doNothing, some([pressedEnter, soundIsFinished, timeElapsed(3)]), stopSound)
+smileWithSound = addImagesWithSound(mywin, ['smile.png'], "Toreador-clipped.wav")
+runTrial(smileWithSound, doNothing, pressedEnter, stopSound)
+# instructions = addSound(mywin, "Toreador-clipped.wav")
 
 # Start experiment
-mywin = visual.Window([1600,700], monitor="testMonitor", units="pix")
 exp = getExperiment()
 #print("POS", mywin.pos)
 #mywin.pos = (0, mywin.pos[1])
@@ -177,9 +253,15 @@ exp = getExperiment()
 correctArr = []
 times = []
 m = event.Mouse(win=mywin)
-for [ans, imageArr, sound] in exp:
+for [ans, imageArr, snd] in training:
+  images = addImagesWithSound(mywin, imageArr, getTrialSoundPath(ans, isCue=True))
+  runTrial(images, doNothing, some([pressedEnter, pressedIn(m)]), respondWithFeedback(ans))
+  sleep(0.25) # delay quarter of a second to make sure long click isn't applied to next trial
+for [ans, imageArr, snd] in exp:
   images = addImages(mywin, imageArr)
   runTrial(images, doNothing, some([pressedEnter, pressedIn(m)]), calculateCorrect(correctArr, index=ans), times)
+  sleep(0.25) # delay quarter of a second to make sure long click isn't applied to next trial
+  
 
 #smile = addImages(mywin, ['smile.png', 'smile.png', 'smile.png'])
 # instructions = addSound(mywin, "Toreador-clipped.wav")
