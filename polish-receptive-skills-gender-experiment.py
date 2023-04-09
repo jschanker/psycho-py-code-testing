@@ -108,13 +108,16 @@ def addSound(win, soundPath):
 
   return initSound
   
-def addImagesWithSound(win, imageFilePaths, soundPath, vPadding=10, hPadding=10, scaleToFit=True):
+def addImagesWithSound(win, imageFilePaths, soundPath, delay=0, waitUntilSoundComplete=True, vPadding=10, hPadding=10, scaleToFit=True):
   initSound = addSound(win, soundPath)
   initImgs = addImages(win, imageFilePaths, vPadding, hPadding, scaleToFit)
   
   def initImagesWithSound():
     imgs = initImgs()
+    sleep(delay)
     snd = initSound()
+    while waitUntilSoundComplete and not soundIsFinished(snd):
+      pass
     return [imgs, snd]
     
   return initImagesWithSound
@@ -207,7 +210,9 @@ def getTrialSoundPath(index, isCue=False):
 def respondWithFeedback(index):
   def respond(stimuli):
     #print("STIMULI", stimuli)
-    stimuli = stimuli[0] # hack: need to fix this if images are not in 0th position
+    if type(stimuli[0]) is list:
+      stimuli = stimuli[0] # hack to deal with [image, sound],
+                           # need to fix this if images are not in 0th position
     selectedIndex = findOneIndex(stimuli, lambda stim: m.isPressedIn(stim))
     if selectedIndex == index:
       snd = sound.Sound(getTrialSoundPath(index))
@@ -221,6 +226,9 @@ def respondWithFeedback(index):
   
 def calculateCorrect(correctArr, index):
   def addCorrect(stimuli):
+    if type(stimuli[0]) is list:
+      stimuli = stimuli[0] # hack to deal with [image, sound],
+                           # need to fix this if images are not in 0th position
     selectedIndex = findOneIndex(stimuli, lambda stim: m.isPressedIn(stim))
     correctArr.append(selectedIndex == index)
       
@@ -240,10 +248,36 @@ def runTrial(initFunc, repeatFunc, isCompleteFunc, finishFunc=doNothing, times=[
 mywin = visual.Window([700,700], monitor="testMonitor", units="pix")
 training = getTraining()
 instructions = addSound(mywin, "Toreador-clipped.wav") # need instructions
-runTrial(instructions, doNothing, some([pressedEnter, soundIsFinished, timeElapsed(3)]), stopSound)
-smileWithSound = addImagesWithSound(mywin, ['smile.png'], "Toreador-clipped.wav")
-runTrial(smileWithSound, doNothing, pressedEnter, stopSound)
+runTrial(instructions, doNothing, some([pressedEnter, soundIsFinished]), stopSound)
+smileWithSound = addImagesWithSound(mywin, ['smile.png'], "Toreador-clipped.wav", waitUntilSoundComplete=False)
+runTrial(smileWithSound, doNothing, some([pressedEnter]), stopSound)
+#runTrial(doNothing, doNothing, some([pressedEnter, timeElapsed(1)])) # pause for 1 second
 # instructions = addSound(mywin, "Toreador-clipped.wav")
+
+m = event.Mouse(win=mywin)
+for [ans, imageArr, snd] in training:
+  images = addImagesWithSound(mywin, imageArr, getTrialSoundPath(ans, isCue=True), delay=1 if ans==1 else 0)
+  runTrial(images, doNothing, some([pressedEnter, pressedIn(m), timeElapsed(5) if ans==2 else lambda x: False]), respondWithFeedback(ans))
+  sleep(0.25) # delay quarter of a second to make sure long click isn't applied to next trial
+  #if(ans == 2):
+    # hack - add previous images just to get background color to change, do in loop to have access to images
+    # mywin.setColor([0, 0, 1], colorSpace='rgb')
+    # runTrial(images, doNothing, timeElapsed(0))
+    # mywin.flip()
+
+mywin.setColor([0, 0, 1], colorSpace='rgb')
+smile = addImages(mywin, ['smile.png'])
+mywin.flip()
+# hack - draw image of size 0 to force background color to change
+# grating = visual.GratingStim(win=mywin, mask="circle", size=14, pos=[0,0], sf=3)
+# hack draw smile for 0 to force background color change
+runTrial(smile, doNothing, timeElapsed(0))
+mywin.flip()
+core.wait(3.0)
+# grating.draw()
+# mywin.flip()
+# core.wait(4.0)
+# mywin.flip()
 
 # Start experiment
 exp = getExperiment()
@@ -252,13 +286,9 @@ exp = getExperiment()
 #print("POS", mywin.pos)
 correctArr = []
 times = []
-m = event.Mouse(win=mywin)
-for [ans, imageArr, snd] in training:
-  images = addImagesWithSound(mywin, imageArr, getTrialSoundPath(ans, isCue=True))
-  runTrial(images, doNothing, some([pressedEnter, pressedIn(m)]), respondWithFeedback(ans))
-  sleep(0.25) # delay quarter of a second to make sure long click isn't applied to next trial
 for [ans, imageArr, snd] in exp:
-  images = addImages(mywin, imageArr)
+  # images = addImages(mywin, imageArr)
+  images = addImagesWithSound(mywin, imageArr, getTrialSoundPath(0, isCue=True), delay=0, waitUntilSoundComplete=False) # sounds are all wrong
   runTrial(images, doNothing, some([pressedEnter, pressedIn(m)]), calculateCorrect(correctArr, index=ans), times)
   sleep(0.25) # delay quarter of a second to make sure long click isn't applied to next trial
   
