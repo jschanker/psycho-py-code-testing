@@ -56,9 +56,10 @@ def getExperiment():
   exp = [
     [
      [pict[-1].lower() for pict in row[1:COLS_IN_EXP-1]].index(row[0].split()[1].lower()), 
-     ["PICTURES FOR VISUAL STIMULI/" + img + ".jpeg" for img in row[1:COLS_IN_EXP-1]], 
-     row[COLS_IN_EXP-1]] 
-     for row in expRows.values.tolist()
+     ["PICTURES FOR VISUAL STIMULI/" + img + ".jpeg" for img in row[1:COLS_IN_EXP-1]],
+     "wav_recordings/RECEPTIVE CUE " + str(randint(1, 2)) + row[COLS_IN_EXP-1][0].lower() + ".wav"
+    ]
+    for row in expRows.values.tolist()
   ]
   print("EXPERIMENT ROW", experimentRowNum, "COL", experimentColNum, 
   "chosen from", NUM_OF_LISTS_Y, "rows and", NUM_OF_LISTS_X, "columns:\n", exp)
@@ -288,7 +289,7 @@ correctArr = []
 times = []
 for [ans, imageArr, snd] in exp:
   # images = addImages(mywin, imageArr)
-  images = addImagesWithSound(mywin, imageArr, getTrialSoundPath(0, isCue=True), delay=0, waitUntilSoundComplete=False) # sounds are all wrong
+  images = addImagesWithSound(mywin, imageArr, snd, delay=0, waitUntilSoundComplete=False) # sounds are all wrong
   runTrial(images, doNothing, some([pressedEnter, pressedIn(m)]), calculateCorrect(correctArr, index=ans), times)
   sleep(0.25) # delay quarter of a second to make sure long click isn't applied to next trial
   
