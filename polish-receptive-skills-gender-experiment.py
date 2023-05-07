@@ -4,6 +4,8 @@ from time import time, sleep
 import pandas as pd
 from random import randint
 # from functools import partial
+from psychopy import gui
+import os
 
 def getTraining():
   df = pd.read_excel('TRAINING_PHASE.xlsx', sheet_name=0)
@@ -32,8 +34,8 @@ def getTraining():
   print(NUM_OF_TRAINING_TRIALS, "TRIALS In training data", trial)
   print("\n")
   return trial
-
-def getExperiment():
+  
+def getNumberOfListsInExperiment():
   df = pd.read_excel('EXPERIMENTAL_PHASE.xlsx', sheet_name=0)
   row0 = df.iloc[0].tolist()
   colName = df.columns
@@ -45,9 +47,28 @@ def getExperiment():
   accurateAnswerRowIndex = col0.index("Accurate answer")
   ROWS_IN_EXP = col0.index("Accurate answer", accurateAnswerRowIndex + 1) - accurateAnswerRowIndex - 2
   NUM_OF_LISTS_Y = (len(col0) + 1)/(ROWS_IN_EXP + 2)
+  NUM_OF_LISTS = int(NUM_OF_LISTS_X * NUM_OF_LISTS_Y)
+  return NUM_OF_LISTS
+
+def getExperiment(i=None):
+  df = pd.read_excel('EXPERIMENTAL_PHASE.xlsx', sheet_name=0)
+  row0 = df.iloc[0].tolist()
+  colName = df.columns
+  col0 = df.iloc[:,0].tolist()
+  #print(df.iloc[1].tolist())
+  #print("COL0", col0)
+  COLS_IN_EXP = row0.index("Audio") - row0.index("Accurate answer") + 1
+  NUM_OF_LISTS_X = int(len(row0)/COLS_IN_EXP)
+  accurateAnswerRowIndex = col0.index("Accurate answer")
+  ROWS_IN_EXP = col0.index("Accurate answer", accurateAnswerRowIndex + 1) - accurateAnswerRowIndex - 2
+  NUM_OF_LISTS_Y = int((len(col0) + 1)/(ROWS_IN_EXP + 2))
   NUM_OF_LISTS = NUM_OF_LISTS_X * NUM_OF_LISTS_Y
-  experimentRowNum = randint(0, NUM_OF_LISTS_Y - 1)
-  experimentColNum = randint(0, NUM_OF_LISTS_X - 1)
+  if i is None or i == "Random":
+    experimentRowNum = randint(0, NUM_OF_LISTS_Y - 1)
+    experimentColNum = randint(0, NUM_OF_LISTS_X - 1)
+  else:
+    experimentRowNum = (i - 1) // NUM_OF_LISTS_X
+    experimentColNum = int((i - 1) % NUM_OF_LISTS_X)
   expRows = df.iloc[experimentRowNum * (ROWS_IN_EXP + 2) + 1 : experimentRowNum * (ROWS_IN_EXP + 2) + 1 + ROWS_IN_EXP,
   experimentColNum * (COLS_IN_EXP) : (experimentColNum + 1) * (COLS_IN_EXP)]
   #print("ROWS", COLS_IN_EXP, NUM_OF_LISTS_X, NUM_OF_LISTS_Y, ROWS_IN_EXP, experimentRowNum, experimentColNum)
@@ -248,6 +269,19 @@ def runTrial(initFunc, repeatFunc, isCompleteFunc, finishFunc=doNothing, times=[
 # Start training
 mywin = visual.Window([700,700], monitor="testMonitor", units="pix")
 training = getTraining()
+numOfLists = getNumberOfListsInExperiment()
+myDlg = gui.Dlg(title="Polish receptive skills experiment")
+myDlg.addText('Subject info')
+myDlg.addField('Participant number:')
+myDlg.addText('List info')
+myDlg.addField('List:', choices=["Random"] + [i for i in range(1, numOfLists + 1)])
+[participantNum, listNum] = myDlg.show()  # show dialog and wait for OK or Cancel
+if myDlg.OK:  # or if ok_data is not None
+  print("Participant Number:", participantNum, "\nList Number:", listNum)
+else:
+  print('Experiment cancelled')
+  core.quit()
+
 instructions = addSound(mywin, "Toreador-clipped.wav") # need instructions
 runTrial(instructions, doNothing, some([pressedEnter, soundIsFinished]), stopSound)
 smileWithSound = addImagesWithSound(mywin, ['smile.png'], "Toreador-clipped.wav", waitUntilSoundComplete=False)
@@ -281,7 +315,7 @@ core.wait(3.0)
 # mywin.flip()
 
 # Start experiment
-exp = getExperiment()
+exp = getExperiment(listNum)
 #print("POS", mywin.pos)
 #mywin.pos = (0, mywin.pos[1])
 #print("POS", mywin.pos)
@@ -302,6 +336,12 @@ for [ans, imageArr, snd] in exp:
 print("Results", correctArr, times)
 # runTrial(smile, doNothing, timeElapsed(6))
 # runTrial(smile, doNothing, pressedEnter)
+includeHeadings = "polish-exp-results.csv" not in os.listdir("./")
+with open('polish-exp-results.csv', 'a') as f:
+  if includeHeadings:
+    #f.write(",".join
+    f.write("Participant Number,List Number," + ",".join(["Question " + str(i + 1) + " correct, Time" for i in range(len(correctArr))]))
+  f.write("\n" + str(participantNum) + "," + str(listNum) + "," + ",".join([str(correctArr[i]) + "," + str(times[i]) for i in range(len(correctArr))]))
 
 # clean up and exit
 mywin.close()
