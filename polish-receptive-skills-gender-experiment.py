@@ -6,6 +6,7 @@ from random import randint
 # from functools import partial
 from psychopy import gui
 import os
+import string
 
 def getTraining():
   df = pd.read_excel('TRAINING_PHASE.xlsx', sheet_name=0)
@@ -50,7 +51,7 @@ def getNumberOfListsInExperiment():
   NUM_OF_LISTS = int(NUM_OF_LISTS_X * NUM_OF_LISTS_Y)
   return NUM_OF_LISTS
 
-def getExperiment(i=None):
+def getExperiment(i=None,metadata={}):
   df = pd.read_excel('EXPERIMENTAL_PHASE.xlsx', sheet_name=0)
   row0 = df.iloc[0].tolist()
   colName = df.columns
@@ -85,6 +86,9 @@ def getExperiment(i=None):
   print("EXPERIMENT ROW", experimentRowNum, "COL", experimentColNum, 
   "chosen from", NUM_OF_LISTS_Y, "rows and", NUM_OF_LISTS_X, "columns:\n", exp)
   print("\n")
+  metadata['listNum'] = experimentColNum + experimentRowNum * NUM_OF_LISTS_X + 1
+  metadata['isRandom'] = i is None or i == "Random"
+  metadata['answers'] = [row[1:COLS_IN_EXP-1] for row in expRows.values.tolist()]
   return exp
 
 def findOneIndex(arr, f):
@@ -246,13 +250,14 @@ def respondWithFeedback(index):
     
   return respond
   
-def calculateCorrect(correctArr, index):
+def calculateCorrect(correctArr, index, selectedArr=[]):
   def addCorrect(stimuli):
     if type(stimuli[0]) is list:
       stimuli = stimuli[0] # hack to deal with [image, sound],
                            # need to fix this if images are not in 0th position
     selectedIndex = findOneIndex(stimuli, lambda stim: m.isPressedIn(stim))
     correctArr.append(selectedIndex == index)
+    selectedArr.append(selectedIndex)
       
   return addCorrect
 
@@ -261,29 +266,34 @@ def runTrial(initFunc, repeatFunc, isCompleteFunc, finishFunc=doNothing, times=[
   startTime = time()
   while(not isCompleteFunc(retVal)):
     repeatFunc(retVal)
+    if event.getKeys('x') or event.getKeys('escape'):
+      core.quit()
   timeElapsed = time() - startTime
   finishFunc(retVal)
   times.append(timeElapsed)
   return timeElapsed
   
 # Start training
-mywin = visual.Window([700,700], monitor="testMonitor", units="pix")
+# mywin = visual.Window([700,700], monitor="testMonitor", units="pix", pos=[100, 100])
 training = getTraining()
 numOfLists = getNumberOfListsInExperiment()
-myDlg = gui.Dlg(title="Polish receptive skills experiment")
+myDlg = gui.Dlg(title="Polish receptive skills experiment", screen=-1)
 myDlg.addText('Subject info')
 myDlg.addField('Participant number:')
 myDlg.addText('List info')
 myDlg.addField('List:', choices=["Random"] + [i for i in range(1, numOfLists + 1)])
 [participantNum, listNum] = myDlg.show()  # show dialog and wait for OK or Cancel
+
 if myDlg.OK:  # or if ok_data is not None
   print("Participant Number:", participantNum, "\nList Number:", listNum)
 else:
   print('Experiment cancelled')
   core.quit()
 
-instructions = addSound(mywin, "Toreador-clipped.wav") # need instructions
-runTrial(instructions, doNothing, some([pressedEnter, soundIsFinished]), stopSound)
+mywin = visual.Window([700,700], monitor="testMonitor", units="pix", fullscr=True)
+
+# instructions = addSound(mywin, "Toreador-clipped.wav") # need instructions
+# runTrial(instructions, doNothing, some([pressedEnter, soundIsFinished]), stopSound)
 smileWithSound = addImagesWithSound(mywin, ['smile.png'], "Toreador-clipped.wav", waitUntilSoundComplete=False)
 runTrial(smileWithSound, doNothing, some([pressedEnter]), stopSound)
 #runTrial(doNothing, doNothing, some([pressedEnter, timeElapsed(1)])) # pause for 1 second
@@ -315,16 +325,18 @@ core.wait(3.0)
 # mywin.flip()
 
 # Start experiment
-exp = getExperiment(listNum)
+metadata = {}
+exp = getExperiment(listNum, metadata)
 #print("POS", mywin.pos)
 #mywin.pos = (0, mywin.pos[1])
 #print("POS", mywin.pos)
 correctArr = []
+selectedArr = []
 times = []
 for [ans, imageArr, snd] in exp:
   # images = addImages(mywin, imageArr)
   images = addImagesWithSound(mywin, imageArr, snd, delay=0, waitUntilSoundComplete=False) # sounds are all wrong
-  runTrial(images, doNothing, some([pressedEnter, pressedIn(m)]), calculateCorrect(correctArr, index=ans), times)
+  runTrial(images, doNothing, some([pressedEnter, pressedIn(m)]), calculateCorrect(correctArr, index=ans, selectedArr=selectedArr), times)
   sleep(0.25) # delay quarter of a second to make sure long click isn't applied to next trial
   
 
@@ -333,15 +345,26 @@ for [ans, imageArr, snd] in exp:
 #instructions = addSound(mywin, "recordings/D1-DIMM.mp3")
 # runTrial(instructions, doNothing, some([soundIsFinished, pressedEnter]), stopSound)
 #runTrial(smile, doNothing, some([pressedEnter, pressedIn(m)]), calculateCorrect(correctArr, index=1), times)
-print("Results", correctArr, times)
+print("Results", correctArr, times, metadata)
+
+# https://stackoverflow.com/a/35993659
+questionIndices = [int(answer[0].strip(string.ascii_letters)) for answer in metadata["answers"]]
+inOrderIndices = [questionIndices.index(j + 1) for j in range(len(questionIndices))]
+inOrderSelectedAnswers = [metadata["answers"][j][selectedArr[j]] for j in inOrderIndices]
+inOrderCorrectAnswers = [correctArr[j] for j in inOrderIndices]
 # runTrial(smile, doNothing, timeElapsed(6))
 # runTrial(smile, doNothing, pressedEnter)
 includeHeadings = "polish-exp-results.csv" not in os.listdir("./")
+
+# inOrderSelectedAnswers, inOrderCorrectAnswers
+
+print("\n" + str(participantNum) + "," + str(metadata["isRandom"]) + "," + str(metadata["listNum"]) + "," + ",".join([str(inOrderSelectedAnswers[i]) + "," + str(inOrderCorrectAnswers[i]) + "," + str(times[i]) for i in range(len(correctArr))]))
+
 with open('polish-exp-results.csv', 'a') as f:
   if includeHeadings:
     #f.write(",".join
-    f.write("Participant Number,List Number," + ",".join(["Question " + str(i + 1) + " correct, Time" for i in range(len(correctArr))]))
-  f.write("\n" + str(participantNum) + "," + str(listNum) + "," + ",".join([str(correctArr[i]) + "," + str(times[i]) for i in range(len(correctArr))]))
+    f.write("Participant Number,Is Random,List Number," + ",".join(["Selected Stimuli, Question " + str(i + 1) + " correct, Time" for i in range(len(correctArr))]))
+  f.write("\n" + str(participantNum) + "," + str(metadata["isRandom"]) + "," + str(metadata["listNum"]) + "," + ",".join([str(inOrderSelectedAnswers[i]) + "," + str(inOrderCorrectAnswers[i]) + "," + str(times[i]) for i in range(len(correctArr))]))
 
 # clean up and exit
 mywin.close()
