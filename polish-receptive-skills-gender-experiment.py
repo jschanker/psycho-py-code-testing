@@ -123,7 +123,7 @@ def addImages(win, filePaths, vPadding=10, hPadding=10, scaleToFit=True):
   return initImgs
   
 def addSound(win, soundPath):
-  snd = sound.Sound(soundPath)
+  snd = sound.Sound(soundPath, stereo=True)
   
   def initSound():
     # win.flip()
@@ -320,24 +320,31 @@ mywin = visual.Window([700,700], monitor="testMonitor", units="pix", fullscr=Tru
 
 # instructions = addSound(mywin, "Toreador-clipped.wav") # need instructions
 # runTrial(instructions, doNothing, some([pressedEnter, soundIsFinished]), stopSound)
-smileWithSound = addImagesWithSound(mywin, ['smile.png'], "Toreador-clipped.wav", waitUntilSoundComplete=False)
+smileWithSound = addImagesWithSound(mywin, ['smile.png'], "wav_recordings/look-sound.wav", waitUntilSoundComplete=False)
 runTrial(smileWithSound, doNothing, some([pressedEnter]), stopSound)
 #runTrial(doNothing, doNothing, some([pressedEnter, timeElapsed(1)])) # pause for 1 second
 # instructions = addSound(mywin, "Toreador-clipped.wav")
 
 m = event.Mouse(win=mywin)
-
 for [ans, imageArr, snd] in training:
-  images = addImagesWithSound(mywin, imageArr, getTrialSoundPath(ans, isCue=True), delay=1 if ans==1 else 0)
-  runTrial(images, doNothing, some([pressedEnter, pressedIn(m), timeElapsed(5) if ans==2 else lambda x: False]), respondWithFeedback(ans))
-  sleep(0.25) # delay quarter of a second to make sure long click isn't applied to next trial
-  #if(ans == 2):
-    # hack - add previous images just to get background color to change, do in loop to have access to images
-    # mywin.setColor([0, 0, 1], colorSpace='rgb')
-    # runTrial(images, doNothing, timeElapsed(0))
-    # mywin.flip()
+  m.clickReset()
+  changeBackgroundColor(mywin, [0, 0, 1])
+  sleep(1)
+  images = addImages(mywin, imageArr)
+  runTrial(images, doNothing, some([pressedEnter, timeElapsed(3)])) # show images with silence for 3 s, not really a trial
+  #mywin.setColor([0, 1, 0], colorSpace='rgb') # change background color
+  changeBackgroundColor(mywin, [0, 1, 0])
+  core.wait(1)
+  #runTrial(addImages(mywin, []), doNothing, some([pressedEnter, timeElapsed(1)])) # show nothing for 1 s
+  imagesWithSound1 = addImagesWithSound(mywin, imageArr, getTrialSoundPath(ans, isCue=True), delay=0, waitUntilSoundComplete=True)
+  runTrial(imagesWithSound1, doNothing, some([timeElapsed(0)])) # show images and play first sound, not really a trial
+  # imagesWithSound2 = addImagesWithSound(mywin, imageArr, snds[1], delay=0, waitUntilSoundComplete=False) # show images again, playing second sound after delay
+  runTrial(images, addSound(mywin, getTrialSoundPath(ans, isCue=True)), some([pressedEnter, pressedIn(m), timeElapsedAfterSoundEnds(2)]), respondWithFeedback(ans), delayBetweenInitAndFunc=2)
+  # sleep(0.25) # delay quarter of a second to make sure long click isn't applied to next trial
 
 changeBackgroundColor(mywin, [0, 0, 1])
+smileWithSound = addImagesWithSound(mywin, ['smile.png'], "wav_recordings/look-sound.wav", waitUntilSoundComplete=False)
+runTrial(smileWithSound, doNothing, some([pressedEnter]), stopSound)
 # hack - draw image of size 0 to force background color to change
 # grating = visual.GratingStim(win=mywin, mask="circle", size=14, pos=[0,0], sf=3)
 # hack draw smile for 0 to force background color change
@@ -371,7 +378,7 @@ for [ans, imageArr, snds] in exp:
   imagesWithSound1 = addImagesWithSound(mywin, imageArr, snds[0], delay=0, waitUntilSoundComplete=True)
   runTrial(imagesWithSound1, doNothing, some([timeElapsed(0)])) # show images and play first sound, not really a trial
   # imagesWithSound2 = addImagesWithSound(mywin, imageArr, snds[1], delay=0, waitUntilSoundComplete=False) # show images again, playing second sound after delay
-  runTrial(images, addSound(mywin, snds[1]), some([pressedEnter, pressedIn(m), timeElapsedAfterSoundEnds(1)]), calculateCorrect(correctArr, index=ans, selectedArr=selectedArr), times, delayBetweenInitAndFunc=2)
+  runTrial(images, addSound(mywin, snds[1]), some([pressedEnter, pressedIn(m), timeElapsedAfterSoundEnds(2)]), calculateCorrect(correctArr, index=ans, selectedArr=selectedArr), times, delayBetweenInitAndFunc=2)
   # sleep(0.25) # delay quarter of a second to make sure long click isn't applied to next trial
   
 
