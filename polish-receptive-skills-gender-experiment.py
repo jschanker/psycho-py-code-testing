@@ -79,7 +79,7 @@ def getExperiment(i=None,metadata={}):
     [
      [pict[-1].lower() for pict in row[1:COLS_IN_EXP-1]].index(row[0].split()[1].lower()), 
      ["PICTURES FOR VISUAL STIMULI/" + img + ".jpeg" for img in row[1:COLS_IN_EXP-1]],
-     "wav_recordings/RECEPTIVE CUE " + str(randint(1, 2)) + row[COLS_IN_EXP-1][0].lower() + ".wav"
+     ["wav_recordings/RECEPTIVE CUE " + str(i) + row[COLS_IN_EXP-1][0].lower() + ".wav" for i in range(1, 3)]
     ]
     for row in expRows.values.tolist()
   ]
@@ -182,25 +182,37 @@ def addMovie(win, filePath, xPosition=HPosition.CENTER, yPosition=VPosition.MIDD
   
   return mov
 
-def soundIsFinished(retVal=None):
+def soundIsFinished(retVal=None, retVal2=None):
   return retVal.status == constants.FINISHED
 
-def pressedEnter(retVal=None):
+def pressedEnter(retVal=None, retVal2=None):
   return event.getKeys('return') or event.getKeys('q')
   
 def timeElapsed(s):
   start = time()
   
-  def timePassed(retVal=None):
+  def timePassed(retVal=None, retVal2=None):
     return time() - start >= s
     
   return timePassed
-  
-def doNothing(retVal=None):
+
+def timeElapsedAfterSoundEnds(s):
+  start = None
+  def timePassed(retVal=None, sound=None):
+    nonlocal start
+    if hasattr(sound, "status") and start != None:
+      return time() - start >= s
+    elif hasattr(sound, "status") and soundIsFinished(sound) and start == None:
+      start = time()
+    return False
+      
+  return timePassed
+
+def doNothing(retVal=None, retVal2=None):
   pass
   
 def pressedIn(m): 
-  def mousePressed(stimuli):
+  def mousePressed(stimuli, retVal2=None):
     if type(stimuli[0]) is list:
       stimuli = stimuli[0] # hack to deal with [image, sound]
     return any([m.isPressedIn(stim) for stim in stimuli])
@@ -208,22 +220,23 @@ def pressedIn(m):
   return mousePressed
 
 def every(conditions):
-  def everyCond(args):
-    return all([condition(args) for condition in conditions])
+  def everyCond(args, retVal2=None):
+    return all([condition(args, retVal2) for condition in conditions])
     
   return everyCond
   
 def some(conditions):
-  def someCond(args):
-    return any([condition(args) for condition in conditions])
+  def someCond(args, retVal2=None):
+    return any([condition(args, retVal2) for condition in conditions])
     
   return someCond
   
-def stopSound(arg=None):
-  if type(arg) is list:
-    [x.stop() if hasattr(x, 'stop') else "" for x in arg]
-  else:
-    arg.stop()
+def stopSound(arg=None, arg2=None):
+  for a in [arg, arg2]:
+    if type(a) is list:
+      [x.stop() if hasattr(x, 'stop') else "" for x in a]
+    elif hasattr(a, 'stop'):
+      a.stop()
     
 def isImage(img):
   return hasattr(img, size) # look up class type to use instanceof instead
@@ -234,7 +247,7 @@ def getTrialSoundPath(index, isCue=False):
   return 'wav_recordings/T' + str(index + 1) + answers[index] + ' ' + suffix + '.wav'
 
 def respondWithFeedback(index):
-  def respond(stimuli):
+  def respond(stimuli, extra=None):
     #print("STIMULI", stimuli)
     if type(stimuli[0]) is list:
       stimuli = stimuli[0] # hack to deal with [image, sound],
@@ -251,27 +264,40 @@ def respondWithFeedback(index):
   return respond
   
 def calculateCorrect(correctArr, index, selectedArr=[]):
-  def addCorrect(stimuli):
+  def addCorrect(stimuli, s):
     if type(stimuli[0]) is list:
       stimuli = stimuli[0] # hack to deal with [image, sound],
                            # need to fix this if images are not in 0th position
     selectedIndex = findOneIndex(stimuli, lambda stim: m.isPressedIn(stim))
     correctArr.append(selectedIndex == index)
     selectedArr.append(selectedIndex)
+    if hasattr(s, 'stop'): # hack to stop playing sound, should be separate function
+      s.stop()
       
   return addCorrect
 
-def runTrial(initFunc, repeatFunc, isCompleteFunc, finishFunc=doNothing, times=[]):
+def runTrial(initFunc, funcAfterDelay, isCompleteFunc, finishFunc=doNothing, times=[], delayBetweenInitAndFunc=0):
   retVal = initFunc()
+  retVal2 = None
   startTime = time()
-  while(not isCompleteFunc(retVal)):
-    repeatFunc(retVal)
+  completedFuncAfterDelay = False
+  while(not isCompleteFunc(retVal, retVal2)):
+    # repeatFunc(retVal)
     if event.getKeys('x') or event.getKeys('escape'):
       core.quit()
+    if time() - startTime >= delayBetweenInitAndFunc and not completedFuncAfterDelay:
+      retVal2 = funcAfterDelay()
+      completedFuncAfterDelay = True
   timeElapsed = time() - startTime
-  finishFunc(retVal)
+  finishFunc(retVal, retVal2)
   times.append(timeElapsed)
   return timeElapsed
+  
+def changeBackgroundColor(win, color):
+  win.setColor(color, colorSpace='rgb')
+  #smile = addImages(mywin, ['smile.png'])
+  runTrial(addImages(mywin, []), doNothing, some([pressedEnter, timeElapsed(0)]))
+  win.flip()
   
 # Start training
 # mywin = visual.Window([700,700], monitor="testMonitor", units="pix", pos=[100, 100])
@@ -300,6 +326,7 @@ runTrial(smileWithSound, doNothing, some([pressedEnter]), stopSound)
 # instructions = addSound(mywin, "Toreador-clipped.wav")
 
 m = event.Mouse(win=mywin)
+
 for [ans, imageArr, snd] in training:
   images = addImagesWithSound(mywin, imageArr, getTrialSoundPath(ans, isCue=True), delay=1 if ans==1 else 0)
   runTrial(images, doNothing, some([pressedEnter, pressedIn(m), timeElapsed(5) if ans==2 else lambda x: False]), respondWithFeedback(ans))
@@ -310,14 +337,12 @@ for [ans, imageArr, snd] in training:
     # runTrial(images, doNothing, timeElapsed(0))
     # mywin.flip()
 
-mywin.setColor([0, 0, 1], colorSpace='rgb')
-smile = addImages(mywin, ['smile.png'])
-mywin.flip()
+changeBackgroundColor(mywin, [0, 0, 1])
 # hack - draw image of size 0 to force background color to change
 # grating = visual.GratingStim(win=mywin, mask="circle", size=14, pos=[0,0], sf=3)
 # hack draw smile for 0 to force background color change
-runTrial(smile, doNothing, timeElapsed(0))
-mywin.flip()
+##runTrial(smile, doNothing, timeElapsed(0))
+##mywin.flip()
 core.wait(3.0)
 # grating.draw()
 # mywin.flip()
@@ -333,11 +358,21 @@ exp = getExperiment(listNum, metadata)
 correctArr = []
 selectedArr = []
 times = []
-for [ans, imageArr, snd] in exp:
-  # images = addImages(mywin, imageArr)
-  images = addImagesWithSound(mywin, imageArr, snd, delay=0, waitUntilSoundComplete=False) # sounds are all wrong
-  runTrial(images, doNothing, some([pressedEnter, pressedIn(m)]), calculateCorrect(correctArr, index=ans, selectedArr=selectedArr), times)
-  sleep(0.25) # delay quarter of a second to make sure long click isn't applied to next trial
+for [ans, imageArr, snds] in exp:
+  m.clickReset()
+  changeBackgroundColor(mywin, [0, 0, 1])
+  sleep(1)
+  images = addImages(mywin, imageArr)
+  runTrial(images, doNothing, some([pressedEnter, timeElapsed(3)])) # show images with silence for 3 s, not really a trial
+  #mywin.setColor([0, 1, 0], colorSpace='rgb') # change background color
+  changeBackgroundColor(mywin, [0, 1, 0])
+  core.wait(1)
+  #runTrial(addImages(mywin, []), doNothing, some([pressedEnter, timeElapsed(1)])) # show nothing for 1 s
+  imagesWithSound1 = addImagesWithSound(mywin, imageArr, snds[0], delay=0, waitUntilSoundComplete=True)
+  runTrial(imagesWithSound1, doNothing, some([timeElapsed(0)])) # show images and play first sound, not really a trial
+  # imagesWithSound2 = addImagesWithSound(mywin, imageArr, snds[1], delay=0, waitUntilSoundComplete=False) # show images again, playing second sound after delay
+  runTrial(images, addSound(mywin, snds[1]), some([pressedEnter, pressedIn(m), timeElapsedAfterSoundEnds(1)]), calculateCorrect(correctArr, index=ans, selectedArr=selectedArr), times, delayBetweenInitAndFunc=2)
+  # sleep(0.25) # delay quarter of a second to make sure long click isn't applied to next trial
   
 
 #smile = addImages(mywin, ['smile.png', 'smile.png', 'smile.png'])
@@ -345,22 +380,22 @@ for [ans, imageArr, snd] in exp:
 #instructions = addSound(mywin, "recordings/D1-DIMM.mp3")
 # runTrial(instructions, doNothing, some([soundIsFinished, pressedEnter]), stopSound)
 #runTrial(smile, doNothing, some([pressedEnter, pressedIn(m)]), calculateCorrect(correctArr, index=1), times)
-print("Results", correctArr, times, metadata)
+print("Results", correctArr, selectedArr, times, metadata)
 
 # https://stackoverflow.com/a/35993659
 questionIndices = [int(answer[0].strip(string.ascii_letters)) for answer in metadata["answers"]]
 inOrderIndices = [questionIndices.index(j + 1) for j in range(len(questionIndices))]
-inOrderSelectedAnswers = [metadata["answers"][j][selectedArr[j]] for j in inOrderIndices]
+inOrderSelectedAnswers = [metadata["answers"][j][selectedArr[j]] if selectedArr[j] >= 0 else "-" for j in inOrderIndices]
 inOrderCorrectAnswers = [correctArr[j] for j in inOrderIndices]
 # runTrial(smile, doNothing, timeElapsed(6))
 # runTrial(smile, doNothing, pressedEnter)
-includeHeadings = "polish-exp-results.csv" not in os.listdir("./")
+includeHeadings = "polish-exp-results-6-9-23.csv" not in os.listdir("./")
 
 # inOrderSelectedAnswers, inOrderCorrectAnswers
 
 print("\n" + str(participantNum) + "," + str(metadata["isRandom"]) + "," + str(metadata["listNum"]) + "," + ",".join([str(inOrderSelectedAnswers[i]) + "," + str(inOrderCorrectAnswers[i]) + "," + str(times[i]) for i in range(len(correctArr))]))
 
-with open('polish-exp-results.csv', 'a') as f:
+with open('polish-exp-results-6-9-23.csv', 'a') as f:
   if includeHeadings:
     #f.write(",".join
     f.write("Participant Number,Is Random,List Number," + ",".join(["Selected Stimuli, Question " + str(i + 1) + " correct, Time" for i in range(len(correctArr))]))
