@@ -143,7 +143,8 @@ def addImagesWithSound(win, imageFilePaths, soundPath, delay=0, waitUntilSoundCo
     sleep(delay)
     snd = initSound()
     while waitUntilSoundComplete and not soundIsFinished(snd):
-      pass
+      if event.getKeys('x') or event.getKeys('escape'):
+        core.quit()
     return [imgs, snd]
     
   return initImagesWithSound
@@ -189,9 +190,13 @@ def pressedEnter(retVal=None, retVal2=None):
   return event.getKeys('return') or event.getKeys('q')
   
 def timeElapsed(s):
-  start = time()
+  start = -1
   
   def timePassed(retVal=None, retVal2=None):
+    nonlocal start
+    if start == -1:
+      start = time()
+    
     return time() - start >= s
     
   return timePassed
@@ -253,7 +258,8 @@ def respondWithFeedback(index):
       stimuli = stimuli[0] # hack to deal with [image, sound],
                            # need to fix this if images are not in 0th position
     selectedIndex = findOneIndex(stimuli, lambda stim: m.isPressedIn(stim))
-    if selectedIndex == index:
+    changeBackgroundColor(mywin, [0, 0, 1])
+    if selectedIndex == index or selectedIndex == -1:
       snd = sound.Sound(getTrialSoundPath(index))
       snd.play()
       while not soundIsFinished(snd):
@@ -342,7 +348,8 @@ for [ans, imageArr, snd] in training:
   runTrial(images, addSound(mywin, getTrialSoundPath(ans, isCue=True)), some([pressedEnter, pressedIn(m), timeElapsedAfterSoundEnds(2)]), respondWithFeedback(ans), delayBetweenInitAndFunc=2)
   # sleep(0.25) # delay quarter of a second to make sure long click isn't applied to next trial
 
-changeBackgroundColor(mywin, [0, 0, 1])
+sleep(1)
+changeBackgroundColor(mywin, [0, 0, 0])
 smileWithSound = addImagesWithSound(mywin, ['smile.png'], "wav_recordings/look-sound.wav", waitUntilSoundComplete=False)
 runTrial(smileWithSound, doNothing, some([pressedEnter]), stopSound)
 # hack - draw image of size 0 to force background color to change
@@ -350,7 +357,7 @@ runTrial(smileWithSound, doNothing, some([pressedEnter]), stopSound)
 # hack draw smile for 0 to force background color change
 ##runTrial(smile, doNothing, timeElapsed(0))
 ##mywin.flip()
-core.wait(3.0)
+# core.wait(3.0)
 # grating.draw()
 # mywin.flip()
 # core.wait(4.0)
@@ -394,19 +401,20 @@ questionIndices = [int(answer[0].strip(string.ascii_letters)) for answer in meta
 inOrderIndices = [questionIndices.index(j + 1) for j in range(len(questionIndices))]
 inOrderSelectedAnswers = [metadata["answers"][j][selectedArr[j]] if selectedArr[j] >= 0 else "-" for j in inOrderIndices]
 inOrderCorrectAnswers = [correctArr[j] for j in inOrderIndices]
+inOrderTimes = [times[j] for j in inOrderIndices]
 # runTrial(smile, doNothing, timeElapsed(6))
 # runTrial(smile, doNothing, pressedEnter)
 includeHeadings = "polish-exp-results-6-9-23.csv" not in os.listdir("./")
 
 # inOrderSelectedAnswers, inOrderCorrectAnswers
 
-print("\n" + str(participantNum) + "," + str(metadata["isRandom"]) + "," + str(metadata["listNum"]) + "," + ",".join([str(inOrderSelectedAnswers[i]) + "," + str(inOrderCorrectAnswers[i]) + "," + str(times[i]) for i in range(len(correctArr))]))
+print("\n" + str(participantNum) + "," + str(metadata["isRandom"]) + "," + str(metadata["listNum"]) + "," + ",".join([str(inOrderSelectedAnswers[i]) + "," + str(inOrderCorrectAnswers[i]) + "," + str(inOrderTimes[i]) for i in range(len(correctArr))]))
 
 with open('polish-exp-results-6-9-23.csv', 'a') as f:
   if includeHeadings:
     #f.write(",".join
     f.write("Participant Number,Is Random,List Number," + ",".join(["Selected Stimuli, Question " + str(i + 1) + " correct, Time" for i in range(len(correctArr))]))
-  f.write("\n" + str(participantNum) + "," + str(metadata["isRandom"]) + "," + str(metadata["listNum"]) + "," + ",".join([str(inOrderSelectedAnswers[i]) + "," + str(inOrderCorrectAnswers[i]) + "," + str(times[i]) for i in range(len(correctArr))]))
+  f.write("\n" + str(participantNum) + "," + str(metadata["isRandom"]) + "," + str(metadata["listNum"]) + "," + ",".join([str(inOrderSelectedAnswers[i]) + "," + str(inOrderCorrectAnswers[i]) + "," + str(inOrderTimes[i]) for i in range(len(correctArr))]))
 
 # clean up and exit
 mywin.close()
