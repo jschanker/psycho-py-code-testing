@@ -16,28 +16,16 @@ def findOneIndex(arr, f, start=0):
   return -1
 
 def getTraining():
-  df = pd.read_excel('Lists_counterbalanced_with_answers.xlsx', sheet_name=0)
-  row0 = df.iloc[0].tolist()
-  colName = df.columns
-  col0 = df.iloc[:,0].tolist()
-  #print(df.iloc[1].tolist())
-  #print("COL0", col0)
-  COLS_IN_TRIAL = 3
-  accurateAnswerRowIndex = col0.index("Accurate answer")
-  NUM_OF_TRAINING_TRIALS = len(col0) - accurateAnswerRowIndex - 1
-  trainingRows = df.iloc[accurateAnswerRowIndex + 1 : accurateAnswerRowIndex + 1 + NUM_OF_TRAINING_TRIALS,
-  0 : COLS_IN_TRIAL]
-  # print("HIGHLIGHTED", findIndex(trainingRows.values.tolist()[0], lambda x: x)
-  #print("ROWS", COLS_IN_EXP, NUM_OF_LISTS_X, NUM_OF_LISTS_Y, ROWS_IN_EXP, experimentRowNum, experimentColNum)
-  #print("SLICE", experimentRowNum * (COLS_IN_EXP), (experimentRowNum + 1) * (COLS_IN_EXP), 
-  #experimentColNum * ROWS_IN_EXP , (experimentColNum + 1) * ROWS_IN_EXP + 1)
-  print("TRAINING ROWS", COLS_IN_TRIAL, accurateAnswerRowIndex, NUM_OF_TRAINING_TRIALS, trainingRows.values.tolist())
+  NUM_OF_TRAINING_TRIALS = 3
+  letters = ['', 'a', 'b', 'c']
   trial = [
     [
-     [pict[-1].lower() for pict in row[1:COLS_IN_TRIAL-1]].index(row[0].split()[2].lower()), 
-     ["PICTURES FOR VISUAL STIMULI/" + img + ".jpeg" for img in row[1:COLS_IN_TRIAL-1]], 
-     row[COLS_IN_TRIAL-1]] 
-     for row in trainingRows.values.tolist()
+     ["PICTURES FOR VISUAL STIMULI DIMINUTIVE/TT" + str(num) + ".JPEG" for i in range(1, 3)],
+     [1, 3] if (num - 1) % 2 == 0 else [3, 1],
+     [getTrialSoundPath(num, isCue=True), getTrialSoundPath(num, isCue=False)]
+     #"wav_recordings/RECEPTIVE CUE " + str(randint(1, 2)) + row[COLS_IN_EXP-1][0].lower() + ".wav"
+    ]
+    for num in range(1, 4)
   ]
   print(NUM_OF_TRAINING_TRIALS, "TRIALS In training data", trial)
   print("\n")
@@ -92,8 +80,6 @@ def getExperiment():
   # soundFilePaths = [getSoundFilePath(row[1]) for row in expRows.values.tolist()] 
   exp = [
     [
-     int(row[COLS_IN_EXP-1]),
-     1 if getSoundFilePath(row[1]).find(row[1]) == -1 else 0,
      [getImageFilePath(item) for item in row[1:COLS_IN_EXP-1]],
      [3 if item.find("D") == 0 else 1 for item in row[1:COLS_IN_EXP-1]],
      getSoundFilePath(row[1])
@@ -158,7 +144,8 @@ def addImagesWithSound(win, imageFilePaths, scaleArr, soundPath, delay=0, waitUn
     sleep(delay)
     snd = initSound()
     while waitUntilSoundComplete and not soundIsFinished(snd):
-      pass
+      if event.getKeys('x') or event.getKeys('escape'):
+        core.quit()
     return [imgs, snd]
     
   return initImagesWithSound
@@ -204,9 +191,13 @@ def pressedEnter(retVal=None):
   return event.getKeys('return') or event.getKeys('q')
   
 def timeElapsed(s):
-  start = time()
+  start = -1
   
   def timePassed(retVal=None):
+    nonlocal start
+    if start == -1:
+      start = time()
+    
     return time() - start >= s
     
   return timePassed
@@ -243,10 +234,10 @@ def stopSound(arg=None):
 def isImage(img):
   return hasattr(img, size) # look up class type to use instanceof instead
     
-def getTrialSoundPath(index, isCue=False):
+def getTrialSoundPath(num, isCue=False):
   answers = 'abcdefghij' # up to 10 letters
   suffix = 'Cue' if isCue else 'Feedback'
-  return 'wav_recordings/T' + str(index + 1) + answers[index] + ' ' + suffix + '.wav'
+  return 'wav_recordings/T' + str(num) + answers[num - 1] + ' ' + suffix + '.wav'
 
 def respondWithFeedback(index):
   def respond(stimuli):
@@ -280,26 +271,77 @@ def runTrial(initFunc, repeatFunc, isCompleteFunc, finishFunc=doNothing, times=[
   startTime = time()
   while(not isCompleteFunc(retVal)):
     repeatFunc(retVal)
+    if event.getKeys('x') or event.getKeys('escape'):
+      core.quit()
   timeElapsed = time() - startTime
   finishFunc(retVal)
   times.append(timeElapsed)
   return timeElapsed
   
-mywin = visual.Window([700,700], monitor="testMonitor", units="pix")
+def runBlankScreen(win, delay=2.5):
+  runTrial(addImages(win, [], []), doNothing, some([timeElapsed(delay)]))
+
+def changeBackgroundColor(win, color):
+  win.setColor(color, colorSpace='rgb')
+  #smile = addImages(mywin, ['smile.png'])
+  runTrial(addImages(mywin, [], []), doNothing, some([pressedEnter, timeElapsed(0)]))
+  win.flip()
+  
+def runSmileTrial(win):
+  smileImage = addImages(win, ['smile.png'], [1])
+  runTrial(smileImage, doNothing, some([pressedEnter]))
+  
+mywin = visual.Window([700,700], monitor="testMonitor", units="pix", fullscr=True)
 m = event.Mouse(win=mywin)
+
+# training phase
+training = getTraining()
+runBlankScreen(mywin)
+runSmileTrial(mywin)
+for [imageArr, scaleArr, snds] in training:  
+  changeBackgroundColor(mywin, [0, 0, 0])
+  images = addImagesWithSound(mywin, imageArr, scaleArr, snds[0], delay=0, waitUntilSoundComplete=True)
+  runTrial(images, doNothing, some([pressedEnter, timeElapsed(3)]))
+  runBlankScreen(mywin, 1)
+  # images = addImages(mywin, imageArr)
+  images = addImagesWithSound(mywin, imageArr, scaleArr, snds[0], delay=0, waitUntilSoundComplete=True)
+  runTrial(images, doNothing, some([pressedEnter, timeElapsed(3)]))
+  
+  images = addImagesWithSound(mywin, imageArr, scaleArr, "wav_recordings_diminutive/Productive Cue 1.wav", delay=0, waitUntilSoundComplete=True)
+  runTrial(images, doNothing, some([pressedEnter, timeElapsed(1)]))
+  images = addImagesWithSound(mywin, imageArr, scaleArr, "wav_recordings_diminutive/Productive Cue 1.wav", delay=0, waitUntilSoundComplete=True)
+  runTrial(images, doNothing, some([pressedEnter, timeElapsed(1)]))
+  changeBackgroundColor(mywin, [0, 0, 1])
+  images = addImagesWithSound(mywin, [], [], snds[1], delay=0, waitUntilSoundComplete=True)
+  runTrial(images, doNothing, some([pressedEnter, timeElapsed(1)]))
+  runBlankScreen(mywin, 1)
+
 # Start experiment
 exp = getExperiment()
+runBlankScreen(mywin)
+runSmileTrial(mywin)
+
 #print("POS", mywin.pos)
 #mywin.pos = (0, mywin.pos[1])
 #print("POS", mywin.pos)
 correctArr = []
 times = []
-for [ans, ans, imageArr, scaleArr, snd] in exp:
+for [imageArr, scaleArr, snd] in exp:
+  changeBackgroundColor(mywin, [0, 0, 0])
+  images = addImagesWithSound(mywin, imageArr, scaleArr, snd, delay=0, waitUntilSoundComplete=True)
+  runTrial(images, doNothing, some([pressedEnter, timeElapsed(3)]))
+  runBlankScreen(mywin, 1)
   # images = addImages(mywin, imageArr)
-  images = addImagesWithSound(mywin, imageArr, scaleArr, snd, delay=0, waitUntilSoundComplete=False) # sounds are all wrong
-  runTrial(images, doNothing, some([pressedEnter, pressedIn(m)]), calculateCorrect(correctArr, index=ans), times)
-  sleep(0.25) # delay quarter of a second to make sure long click isn't applied to next trial
+  images = addImagesWithSound(mywin, imageArr, scaleArr, snd, delay=0, waitUntilSoundComplete=True)
+  runTrial(images, doNothing, some([pressedEnter, timeElapsed(3)]))
   
-print("Results", correctArr, times)  
-
+  images = addImagesWithSound(mywin, imageArr, scaleArr, "wav_recordings_diminutive/Productive Cue 1.wav", delay=0, waitUntilSoundComplete=True)
+  runTrial(images, doNothing, some([pressedEnter, timeElapsed(1)]))
+  images = addImagesWithSound(mywin, imageArr, scaleArr, "wav_recordings_diminutive/Productive Cue 1.wav", delay=0, waitUntilSoundComplete=True)
+  runTrial(images, doNothing, some([pressedEnter, timeElapsed(1)]))
+  changeBackgroundColor(mywin, [0, 0, 1])
+  runBlankScreen(mywin, 1)
+  
+# clean up and exit
+mywin.close()
 core.quit()
