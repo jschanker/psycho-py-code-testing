@@ -6,6 +6,7 @@ from random import randint
 from math import ceil
 from pathlib import Path
 import os
+from psychopy import gui
 # from functools import partial
 
 def findOneIndex(arr, f, start=0):
@@ -36,7 +37,7 @@ def getSoundFilePath(s):
   #lowercaseFile = Path(lowercaseFilename)
   #return lowercaseFilename if lowercaseFile.is_file() else upper(lowerCaseFilename)
   lowercaseFilename = s.lower() + " dim.wav"
-  dirName = "wav_recordings_diminutive"
+  dirName = "wav_recordings"
   return dirName + "/" + (lowercaseFilename if lowercaseFilename in os.listdir(dirName) else lowercaseFilename.upper())
 
 def getImageFilePath(s):
@@ -49,7 +50,7 @@ def getImageFilePath(s):
 
 #print("SOUND", getSoundfile("D1"))
 
-def getExperiment():
+def getNumberOfListsInExperiment():
   df = pd.read_excel('Lists_counterbalanced_with_answers.xlsx', sheet_name=0)
   row1 = df.iloc[1].tolist()
   colName = df.columns
@@ -66,9 +67,36 @@ def getExperiment():
   ROWS_IN_EXP = endRowIndex - startRowIndex
   NUM_OF_LISTS_Y = len(col0)/(ROWS_IN_EXP + 1)
   # print("Y", NUM_OF_LISTS_Y)
+  NUM_OF_LISTS = int(NUM_OF_LISTS_X * NUM_OF_LISTS_Y)
+  return NUM_OF_LISTS
+
+def getExperiment(i=None,metadata={}):
+  df = pd.read_excel('Lists_counterbalanced_with_answers.xlsx', sheet_name=0)
+  row1 = df.iloc[1].tolist()
+  colName = df.columns
+  col0 = df.iloc[:,0].tolist()
+  #print(df.iloc[1].tolist())
+  #print("COL0", col0)
+  #COLS_IN_EXP = 3
+  COLS_IN_EXP = 4
+  #NUM_OF_LISTS_X = ceil((len(row1) + 2)/(COLS_IN_EXP + 2))
+  NUM_OF_LISTS_X = ceil((len(row1) + 1)/(COLS_IN_EXP + 1))
+  # print("C0", col0)
+  startRowIndex = findOneIndex(col0, lambda x: isinstance(x, str) and len(x) > 0)
+  endRowIndex = findOneIndex(col0, lambda x: not isinstance(x, str) or isinstance(x, str) and len(x) == 0, startRowIndex)
+  ROWS_IN_EXP = endRowIndex - startRowIndex
+  NUM_OF_LISTS_Y = int(len(col0)/(ROWS_IN_EXP + 1))
+  # print("Y", NUM_OF_LISTS_Y)
   NUM_OF_LISTS = NUM_OF_LISTS_X * NUM_OF_LISTS_Y
-  experimentRowNum = randint(0, NUM_OF_LISTS_Y - 1)
-  experimentColNum = randint(0, NUM_OF_LISTS_X - 1)
+  if i is None or i == "Random":
+    experimentRowNum = randint(0, NUM_OF_LISTS_Y - 1)
+    experimentColNum = randint(0, NUM_OF_LISTS_X - 1)
+  else:
+    experimentRowNum = (i - 1) // NUM_OF_LISTS_X
+    experimentColNum = int((i - 1) % NUM_OF_LISTS_X)
+    
+  #experimentRowNum = randint(0, NUM_OF_LISTS_Y - 1)
+  #experimentColNum = randint(0, NUM_OF_LISTS_X - 1)
   #expRows = df.iloc[experimentRowNum * (ROWS_IN_EXP + 1) + startRowIndex : experimentRowNum * (ROWS_IN_EXP + 1) + startRowIndex + ROWS_IN_EXP,
   #experimentColNum * (COLS_IN_EXP + 2) : (experimentColNum + 1) * (COLS_IN_EXP + 2) - 2]
   expRows = df.iloc[experimentRowNum * (ROWS_IN_EXP + 1) + startRowIndex : experimentRowNum * (ROWS_IN_EXP + 1) + startRowIndex + ROWS_IN_EXP,
@@ -87,9 +115,13 @@ def getExperiment():
     ]
     for row in expRows.values.tolist()
   ]
+  
   print("EXPERIMENT ROW", experimentRowNum, "COL", experimentColNum, 
   "chosen from", NUM_OF_LISTS_Y, "rows and", NUM_OF_LISTS_X, "columns:\n", exp)
   print("\n")
+  metadata['listNum'] = experimentColNum + experimentRowNum * NUM_OF_LISTS_X + 1
+  metadata['isRandom'] = i is None or i == "Random"
+  # metadata['answers'] = [row[1:COLS_IN_EXP-1] for row in expRows.values.tolist()]
   return exp
   
 #getExperiment()
@@ -291,6 +323,20 @@ def runSmileTrial(win):
   smileImage = addImages(win, ['smile.png'], [1])
   runTrial(smileImage, doNothing, some([pressedEnter]))
   
+numOfLists = getNumberOfListsInExperiment()
+myDlg = gui.Dlg(title="Polish productive skills experiment", screen=-1)
+myDlg.addText('Subject info')
+myDlg.addField('Participant number:')
+myDlg.addText('List info')
+myDlg.addField('List:', choices=["Random"] + [i for i in range(1, numOfLists + 1)])
+[participantNum, listNum] = myDlg.show()  # show dialog and wait for OK or Cancel
+
+if myDlg.OK:  # or if ok_data is not None
+  print("Participant Number:", participantNum, "\nList Number:", listNum)
+else:
+  print('Experiment cancelled')
+  core.quit()
+  
 mywin = visual.Window([700,700], monitor="testMonitor", units="pix", fullscr=True)
 m = event.Mouse(win=mywin)
 
@@ -307,9 +353,9 @@ for [imageArr, scaleArr, snds] in training:
   images = addImagesWithSound(mywin, imageArr, scaleArr, snds[0], delay=0, waitUntilSoundComplete=True)
   runTrial(images, doNothing, some([pressedEnter, timeElapsed(3)]))
   
-  images = addImagesWithSound(mywin, imageArr, scaleArr, "wav_recordings_diminutive/Productive Cue 1.wav", delay=0, waitUntilSoundComplete=True)
+  images = addImagesWithSound(mywin, imageArr, scaleArr, "wav_recordings/Productive Cue 1.wav", delay=0, waitUntilSoundComplete=True)
   runTrial(images, doNothing, some([pressedEnter, timeElapsed(1)]))
-  images = addImagesWithSound(mywin, imageArr, scaleArr, "wav_recordings_diminutive/Productive Cue 1.wav", delay=0, waitUntilSoundComplete=True)
+  images = addImagesWithSound(mywin, imageArr, scaleArr, "wav_recordings/Productive Cue 1.wav", delay=0, waitUntilSoundComplete=True)
   runTrial(images, doNothing, some([pressedEnter, timeElapsed(1)]))
   changeBackgroundColor(mywin, [0, 0, 1])
   images = addImagesWithSound(mywin, [], [], snds[1], delay=0, waitUntilSoundComplete=True)
@@ -317,7 +363,8 @@ for [imageArr, scaleArr, snds] in training:
   runBlankScreen(mywin, 1)
 
 # Start experiment
-exp = getExperiment()
+metadata = {}
+exp = getExperiment(listNum, metadata)
 runBlankScreen(mywin)
 runSmileTrial(mywin)
 
@@ -335,12 +382,21 @@ for [imageArr, scaleArr, snd] in exp:
   images = addImagesWithSound(mywin, imageArr, scaleArr, snd, delay=0, waitUntilSoundComplete=True)
   runTrial(images, doNothing, some([pressedEnter, timeElapsed(3)]))
   
-  images = addImagesWithSound(mywin, imageArr, scaleArr, "wav_recordings_diminutive/Productive Cue 1.wav", delay=0, waitUntilSoundComplete=True)
+  images = addImagesWithSound(mywin, imageArr, scaleArr, "wav_recordings/Productive Cue 1.wav", delay=0, waitUntilSoundComplete=True)
   runTrial(images, doNothing, some([pressedEnter, timeElapsed(1)]))
-  images = addImagesWithSound(mywin, imageArr, scaleArr, "wav_recordings_diminutive/Productive Cue 1.wav", delay=0, waitUntilSoundComplete=True)
+  images = addImagesWithSound(mywin, imageArr, scaleArr, "wav_recordings/Productive Cue 1.wav", delay=0, waitUntilSoundComplete=True)
   runTrial(images, doNothing, some([pressedEnter, timeElapsed(1)]))
   changeBackgroundColor(mywin, [0, 0, 1])
   runBlankScreen(mywin, 1)
+
+outputFile = 'polish-participant-and-list-info.csv'
+includeHeadings = outputFile not in os.listdir("./")
+
+with open(outputFile, 'a') as f:
+  if includeHeadings:
+    #f.write(",".join
+    f.write("Participant Number,Is Random,List Number")
+  f.write("\n" + str(participantNum) + "," + str(metadata["isRandom"]) + "," + str(metadata["listNum"]))
   
 # clean up and exit
 mywin.close()
