@@ -22,7 +22,7 @@ def getTraining():
   trial = [
     [
      ["PICTURES FOR VISUAL STIMULI DIMINUTIVE/TT" + str(num) + ".JPEG" for i in range(1, 3)],
-     [1, 3] if (num - 1) % 2 == 0 else [3, 1],
+     [3, 1] if num == 1 else [1, 3],
      [getTrialSoundPath(num, isCue=True), getTrialSoundPath(num, isCue=False)]
      #"wav_recordings/RECEPTIVE CUE " + str(randint(1, 2)) + row[COLS_IN_EXP-1][0].lower() + ".wav"
     ]
